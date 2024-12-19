@@ -108,29 +108,27 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             background: rgba(0, 0, 0, 0.5);
             z-index: 10000;
             display: none;
         }
         .gantt-modal {
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 90%;
-            height: 80%;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
             background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             z-index: 10001;
             display: flex;
             flex-direction: column;
         }
         .gantt-modal-header {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
+            padding: 10px 15px;
+            background: #f5f5f5;
+            border-bottom: 1px solid #ddd;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -141,22 +139,60 @@
             color: #333;
         }
         .gantt-modal-close {
-            cursor: pointer;
-            font-size: 20px;
+            padding: 5px 10px;
+            font-size: 16px;
             color: #666;
+            background: #e0e0e0;
             border: none;
-            background: none;
-            padding: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .gantt-modal-close:hover {
+            background: #d0d0d0;
         }
         .gantt-modal-body {
             flex: 1;
-            padding: 15px;
+            height: calc(100vh - 50px);
             overflow: auto;
+            padding: 10px;
         }
         #gantt-container {
             width: 100%;
             height: 100%;
             background: white;
+        }
+        .gantt-modal-body::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .gantt-modal-body::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .gantt-modal-body::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        .gantt-modal-body::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .gantt_hor_scroll {
+            height: 12px !important;
+        }
+        .gantt_hor_scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+        .gantt_hor_scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .gantt_hor_scroll::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        .gantt_hor_scroll::-webkit-scrollbar-thumb:hover {
+            background: #555;
         }
     `);
 
@@ -323,6 +359,40 @@
             modalContent.appendChild(body);
             modal.appendChild(modalContent);
             document.body.appendChild(modal);
+
+            // 添加 ESC 键监听
+            const handleEsc = (event) => {
+                if (event.key === 'Escape' && modal.style.display === 'block') {
+                    modal.style.display = 'none';
+                }
+            };
+
+            // 添加关闭事件处理
+            const closeModal = () => {
+                modal.style.display = 'none';
+                document.removeEventListener('keydown', handleEsc);
+            };
+
+            // 更新关闭按钮点击事件
+            closeBtn.onclick = closeModal;
+
+            // 当模态框显示时添加 ESC 监听
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'attributes' && 
+                        mutation.attributeName === 'style') {
+                        if (modal.style.display === 'block') {
+                            document.addEventListener('keydown', handleEsc);
+                        } else {
+                            document.removeEventListener('keydown', handleEsc);
+                        }
+                    }
+                });
+            });
+            
+            observer.observe(modal, {
+                attributes: true
+            });
         }
         
         // 显示弹出窗口
@@ -522,7 +592,7 @@
             gantt.config.smart_scales = true;
             
             // 设置滚动选项
-            gantt.config.scroll_size = 10;
+            gantt.config.scroll_size = 8;
             gantt.config.autosize = "y";
             gantt.config.fit_tasks = true;
             gantt.config.show_progress = true;
@@ -600,6 +670,30 @@
             gantt.clearAll(); // 清除现有数据
             gantt.init(container);
             
+            // 设置甘特图自适应容器大小
+            gantt.setSizes();
+            window.addEventListener('resize', function() {
+                gantt.setSizes();
+            });
+
+            // 在显示模态框时触发一次重新计算大小
+            const modalOverlay = document.querySelector('.gantt-modal-overlay');
+            if (modalOverlay) {
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.type === 'attributes' && 
+                            mutation.attributeName === 'style' && 
+                            modalOverlay.style.display === 'block') {
+                            gantt.setSizes();
+                        }
+                    });
+                });
+                
+                observer.observe(modalOverlay, {
+                    attributes: true
+                });
+            }
+            
             log('解析任务数据');
             gantt.parse(tasks);
             log('甘特图初始化成功，数据已加载');
@@ -621,6 +715,22 @@
             } catch (viewError) {
                 log(`调整视图时出错: ${viewError.message}`);
             }
+
+            // 在配置甘特图部分添加滚动相关配置
+            gantt.config.scroll_size = 8; // 设置滚动条大小
+            gantt.config.show_chart = true;
+            gantt.config.show_grid = true;
+            gantt.config.autosize = "y";
+            gantt.config.autoscroll = true;
+            gantt.config.grid_elastic_columns = true; // 允许列宽自适应
+
+            // 设置水平滚动速度
+            gantt.config.wheel_scroll_sensitivity = 50;
+
+            // 允许鼠标滚轮进行水平滚动
+            gantt.attachEvent("onGanttScroll", function(left, top) {
+                log(`甘特图滚动: left=${left}, top=${top}`);
+            });
         } catch (error) {
             log(`甘特图初始化失败: ${error.message}, 堆栈: ${error.stack}`);
         }
