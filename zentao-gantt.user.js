@@ -248,14 +248,6 @@
         .status-pause {
             background-color: #FF9800;
         }
-
-        /* 指派人样式 */
-        .assigned-user {
-            color: #006af1;
-            padding: 2px 6px;
-            border-radius: 3px;
-            background-color: rgba(0, 106, 241, 0.1);
-        }
     `);
 
     // 创建日志面板
@@ -480,7 +472,7 @@
             
             initializeGanttChart(container, taskDoc);
         } else {
-            log('未找到甘特图容器');
+            log('未找到甘���图容器');
         }
     }
 
@@ -681,25 +673,40 @@
             gantt.config.columns = [
                 {
                     name: "text", 
-                    label: "任务名称", 
+                    label: "任务名称 ▼", 
                     tree: true, 
                     width: 300, 
                     resize: true,
+                    sort: true,
                     template: function(task) {
-                        // 构建正确格式的任务链接
                         const baseUrl = window.location.origin;
                         const taskUrl = `${baseUrl}/index.php?m=task&f=view&taskID=${task.id}`;
                         return `<a href="${taskUrl}" class="gantt-task-link" target="_blank" title="${task.text}">${task.text}</a>`;
                     }
                 },
-                {name: "start_date", label: "开始时间", align: "center", width: 100, resize: true},
-                {name: "end_date", label: "结束时间", align: "center", width: 100, resize: true},
+                {
+                    name: "start_date", 
+                    label: "开始时间 ▼", 
+                    align: "center", 
+                    width: 100, 
+                    resize: true,
+                    sort: true
+                },
+                {
+                    name: "end_date", 
+                    label: "结束时间 ▼", 
+                    align: "center", 
+                    width: 100, 
+                    resize: true,
+                    sort: true
+                },
                 {
                     name: "assignedTo", 
-                    label: "指派给", 
+                    label: "指派给 ▼", 
                     align: "center", 
                     width: 80, 
                     resize: true,
+                    sort: true,
                     template: function(task) {
                         if (!task.assignedTo || task.assignedTo === '-') {
                             return '<span style="color: #999;">未指派</span>';
@@ -709,20 +716,22 @@
                 },
                 {
                     name: "progress", 
-                    label: "进度", 
+                    label: "进度 ▼", 
                     align: "center", 
                     width: 80, 
-                    resize: true, 
+                    resize: true,
+                    sort: true,
                     template: function(obj) {
                         return Math.round(obj.progress * 100) + "%";
                     }
                 },
                 {
                     name: "status", 
-                    label: "状态", 
+                    label: "状态 ▼", 
                     align: "center", 
                     width: 80, 
                     resize: true,
+                    sort: true,
                     template: function(task) {
                         const statusMap = {
                             'wait': '<span class="status-tag status-wait">未开始</span>',
@@ -868,12 +877,131 @@
                 return false; // 阻止默认行为
             });
 
+            // 添加列头点击事件
+            gantt.attachEvent("onGridHeaderClick", function(name, e) {
+                const header = e.target.closest(".gantt_grid_head_cell");
+                if (!header) return;
+
+                // 获取当前列的所有唯一值
+                const values = new Set();
+                gantt.getTaskByTime().forEach(task => {
+                    let value = task[name];
+                    if (name === "progress") {
+                        value = Math.round(task.progress * 100) + "%";
+                    } else if (name === "status") {
+                        const statusMap = {
+                            'wait': '未开始',
+                            'doing': '进行中',
+                            'done': '已完成',
+                            'closed': '已关闭',
+                            'cancel': '已取消',
+                            'pause': '已暂停'
+                        };
+                        value = statusMap[value] || value;
+                    } else if (name === "assignedTo") {
+                        value = task.assignedTo || '未指派';
+                    }
+                    if (value) values.add(value);
+                });
+
+                // 创建筛选下拉框
+                const filterPopup = document.createElement('div');
+                filterPopup.className = 'gantt-filter-popup';
+                filterPopup.innerHTML = `
+                    <div class="filter-header">
+                        <input type="text" placeholder="搜索..." class="filter-search">
+                        <div class="filter-actions">
+                            <label><input type="checkbox" class="select-all" checked> 全选</label>
+                            <button class="apply-filter">应用</button>
+                        </div>
+                    </div>
+                    <div class="filter-options">
+                        ${Array.from(values).map(value => `
+                            <label class="filter-option">
+                                <input type="checkbox" value="${value}" checked>
+                                <span>${value}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                `;
+
+                // 定位筛选框
+                const rect = header.getBoundingClientRect();
+                filterPopup.style.position = 'absolute';
+                filterPopup.style.top = `${rect.bottom}px`;
+                filterPopup.style.left = `${rect.left}px`;
+                filterPopup.style.zIndex = '100000'; // 确保在最上层
+                document.body.appendChild(filterPopup);
+
+                // 阻止事件冒泡
+                e.stopPropagation();
+                e.preventDefault();
+
+                // 搜索功能
+                const searchInput = filterPopup.querySelector('.filter-search');
+                searchInput.addEventListener('input', (e) => {
+                    const searchText = e.target.value.toLowerCase();
+                    filterPopup.querySelectorAll('.filter-option').forEach(option => {
+                        const text = option.textContent.toLowerCase();
+                        option.style.display = text.includes(searchText) ? '' : 'none';
+                    });
+                });
+
+                // 全选功能
+                const selectAll = filterPopup.querySelector('.select-all');
+                selectAll.addEventListener('change', (e) => {
+                    filterPopup.querySelectorAll('.filter-option input').forEach(checkbox => {
+                        checkbox.checked = e.target.checked;
+                    });
+                });
+
+                // 应用筛选
+                filterPopup.querySelector('.apply-filter').addEventListener('click', () => {
+                    const selectedValues = new Set();
+                    filterPopup.querySelectorAll('.filter-option input:checked').forEach(checkbox => {
+                        selectedValues.add(checkbox.value);
+                    });
+
+                    // 筛选任务
+                    gantt.clearAll();
+                    const filteredTasks = tasks.data.filter(task => {
+                        let value = task[name];
+                        if (name === "progress") {
+                            value = Math.round(task.progress * 100) + "%";
+                        } else if (name === "status") {
+                            const statusMap = {
+                                'wait': '未开始',
+                                'doing': '进行中',
+                                'done': '已完成',
+                                'closed': '已关闭',
+                                'cancel': '已取消',
+                                'pause': '已暂停'
+                            };
+                            value = statusMap[value] || value;
+                        } else if (name === "assignedTo") {
+                            value = task.assignedTo || '未指派';
+                        }
+                        return selectedValues.has(value);
+                    });
+                    gantt.parse({data: filteredTasks});
+                    filterPopup.remove();
+                });
+
+                // 点击外部关闭
+                document.addEventListener('click', function closeFilter(e) {
+                    if (!filterPopup.contains(e.target) && !header.contains(e.target)) {
+                        filterPopup.remove();
+                        document.removeEventListener('click', closeFilter);
+                    }
+                });
+            });
+
         } catch (error) {
             log(`甘特图初始化失败: ${error.message}, 堆栈: ${error.stack}`);
         }
     }
 
-    // 检查是否应该初始化
+    // 查是否应该初始化
     function shouldInitialize() {
         const url = window.location.href;
         const params = new URLSearchParams(window.location.search);
@@ -1016,6 +1144,194 @@
             }
         }, 1000);
     }
+
+    // 在文件开头添加 initFilters 函数定义
+    function initFilters(ganttInstance, tasks) {
+        try {
+            // 配置列筛选
+            gantt.config.columns = [
+                {
+                    name: "text", 
+                    label: "任务名称", 
+                    tree: true, 
+                    width: 300, 
+                    resize: true,
+                    sort: true,
+                    template: function(task) {
+                        const baseUrl = window.location.origin;
+                        const taskUrl = `${baseUrl}/index.php?m=task&f=view&taskID=${task.id}`;
+                        return `<a href="${taskUrl}" class="gantt-task-link" target="_blank" title="${task.text}">${task.text}</a>`;
+                    }
+                },
+                {
+                    name: "start_date", 
+                    label: "开始时间", 
+                    align: "center", 
+                    width: 100, 
+                    resize: true,
+                    sort: true
+                },
+                {
+                    name: "end_date", 
+                    label: "结束时间", 
+                    align: "center", 
+                    width: 100, 
+                    resize: true,
+                    sort: true
+                },
+                {
+                    name: "assignedTo", 
+                    label: "指派给", 
+                    align: "center", 
+                    width: 80, 
+                    resize: true,
+                    sort: true,
+                    template: function(task) {
+                        if (!task.assignedTo || task.assignedTo === '-') {
+                            return '<span style="color: #999;">未指派</span>';
+                        }
+                        return `<span class="assigned-user">${task.assignedTo}</span>`;
+                    }
+                },
+                {
+                    name: "progress", 
+                    label: "进度", 
+                    align: "center", 
+                    width: 80, 
+                    resize: true,
+                    sort: true,
+                    template: function(obj) {
+                        return Math.round(obj.progress * 100) + "%";
+                    }
+                },
+                {
+                    name: "status", 
+                    label: "状态", 
+                    align: "center", 
+                    width: 80, 
+                    resize: true,
+                    sort: true,
+                    template: function(task) {
+                        const statusMap = {
+                            'wait': '<span class="status-tag status-wait">未开始</span>',
+                            'doing': '<span class="status-tag status-doing">进行中</span>',
+                            'done': '<span class="status-tag status-done">已完成</span>',
+                            'closed': '<span class="status-tag status-closed">已关闭</span>',
+                            'cancel': '<span class="status-tag status-cancel">已取消</span>',
+                            'pause': '<span class="status-tag status-pause">已暂停</span>'
+                        };
+                        return statusMap[task.status] || task.status;
+                    }
+                }
+            ];
+
+            // 启用列筛选
+            gantt.config.grid_width = 600;
+            gantt.config.show_grid = true;
+            gantt.config.grid_resize = true;
+            gantt.config.grid_elastic_columns = true;
+
+            // 添加列头筛选器
+            gantt.attachEvent("onGridHeaderClick", function(name, e) {
+                const column = gantt.getGridColumn(name);
+                if (!column) return;
+
+                const header = e.target.closest(".gantt_grid_head_cell");
+                if (!header) return;
+
+                const values = new Set();
+                gantt.getTaskByTime().forEach(task => {
+                    const value = task[name];
+                    if (value) values.add(value);
+                });
+
+                const filterContainer = document.createElement("div");
+                filterContainer.className = "column-filter-container";
+                filterContainer.innerHTML = `
+                    <div class="filter-list">
+                        <div class="filter-item">
+                            <label><input type="checkbox" value="" checked> 全部</label>
+                        </div>
+                        ${Array.from(values).map(value => `
+                            <div class="filter-item">
+                                <label><input type="checkbox" value="${value}"> ${value}</label>
+                            </div>
+                        `).join("")}
+                    </div>
+                `;
+
+                // 定位筛选框
+                const rect = header.getBoundingClientRect();
+                filterContainer.style.position = "absolute";
+                filterContainer.style.top = rect.bottom + "px";
+                filterContainer.style.left = rect.left + "px";
+                document.body.appendChild(filterContainer);
+
+                // 处理筛选事件
+                const checkboxes = filterContainer.querySelectorAll("input[type=checkbox]");
+                checkboxes.forEach(checkbox => {
+                    checkbox.addEventListener("change", function() {
+                        const selectedValues = new Set();
+                        checkboxes.forEach(cb => {
+                            if (cb.checked && cb.value) {
+                                selectedValues.add(cb.value);
+                            }
+                        });
+
+                        gantt.clearAll();
+                        const filteredTasks = tasks.data.filter(task => {
+                            if (checkboxes[0].checked) return true; // "全部"被选中
+                            return selectedValues.has(task[name]);
+                        });
+                        gantt.parse({data: filteredTasks});
+                    });
+                });
+
+                // 点击其他地方关闭筛选框
+                document.addEventListener("click", function closeFilter(e) {
+                    if (!filterContainer.contains(e.target) && !header.contains(e.target)) {
+                        filterContainer.remove();
+                        document.removeEventListener("click", closeFilter);
+                    }
+                });
+            });
+
+        } catch (error) {
+            log(`初始化过滤器失败: ${error.message}`);
+        }
+    }
+
+    // 添加筛选器样式
+    GM_addStyle(`
+        .column-filter-container {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 8px;
+            z-index: 100000;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .filter-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .filter-item {
+            white-space: nowrap;
+            padding: 2px 4px;
+        }
+        .filter-item:hover {
+            background: #f5f5f5;
+        }
+        .filter-item label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+    `);
 
     // 启动脚本
     if (document.readyState === 'loading') {
