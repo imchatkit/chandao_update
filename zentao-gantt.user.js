@@ -21,6 +21,47 @@
     const QUIET_PERIOD = 500; // 500ms内没有新请求就认为加载完成
     let isInitialized = false; // 添加初始化标志
 
+    // 在文件开头添加日期处理函数
+    function formatDate(dateStr, isEndDate = false) {
+        // 如果日期为空，返回合适的默认值
+        if (!dateStr || dateStr.trim() === '') {
+            const today = new Date();
+            if (isEndDate) {
+                // 如果是结束日期，默认设置为7天后
+                today.setDate(today.getDate() + 7);
+            }
+            return today.toISOString().split('T')[0];
+        }
+        
+        // 如果是"今日"，返回当前日期
+        if (dateStr === '今日') {
+            return new Date().toISOString().split('T')[0];
+        }
+        
+        // 处理 YYYY-MM-DD 格式
+        const match = dateStr.match(/^\d{4}-\d{2}-\d{2}$/);
+        if (match) {
+            return dateStr;
+        }
+        
+        try {
+            // 尝试解析日期
+            const date = new Date(dateStr);
+            if (!isNaN(date.getTime())) {
+                return date.toISOString().split('T')[0];
+            }
+        } catch (e) {
+            log(`日期解析错误: ${e.message}`);
+        }
+        
+        // 如果无法解析，返回当前日期或7天后
+        const fallbackDate = new Date();
+        if (isEndDate) {
+            fallbackDate.setDate(fallbackDate.getDate() + 7);
+        }
+        return fallbackDate.toISOString().split('T')[0];
+    }
+
     // 添加固定的日志面板样式
     GM_addStyle(`
         #gantt-log-panel {
@@ -317,111 +358,249 @@
         };
         
         // 从表格中获取任务数据
-        const taskRows = doc.querySelectorAll('.dtable-body .dtable-cells-container');
-        if (!taskRows || taskRows.length === 0) {
-            log('未找到任务行容器');
+        const taskTable = doc.querySelector('.dtable');
+        if (!taskTable) {
+            log('未找到任务表格');
             return;
         }
 
-        log(`找到 ${taskRows.length} 个任务行容器`);
+        // 获取所有任务行
+        const taskCells = doc.querySelectorAll('.dtable-cell[data-col="name"]');
+        log(`找到任务单元格数量: ${taskCells.length}`);
 
-        taskRows.forEach((container) => {
-            const cells = container.querySelectorAll('.dtable-cell');
-            cells.forEach((cell) => {
-                const rowId = cell.getAttribute('data-row');
-                const colType = cell.getAttribute('data-col');
+        if (!taskCells || taskCells.length === 0) {
+            log('未找到任务单元格');
+            return;
+        }
+
+        // 创建任务映射表
+        const taskMap = new Map();
+
+        // 收集所有任务
+        taskCells.forEach((nameCell, index) => {
+            try {
+                const rowId = nameCell.getAttribute('data-row');
+                if (!rowId) {
+                    log(`第 ${index + 1} 个单元格没有行ID`);
+                    return;
+                }
+
+                const nameLink = nameCell.querySelector('a');
+                if (!nameLink) {
+                    log(`任务 ${rowId} 没有找到名称链接`);
+                    return;
+                }
                 
-                if (colType === 'name') {
-                    try {
-                        const nameLink = cell.querySelector('a');
-                        if (!nameLink) return;
-                        
-                        const name = nameLink.textContent.trim();
-                        const id = rowId;
-                        
-                        // 查找同一行的其他单元格
-                        const estStartedCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="estStarted"]`);
-                        const deadlineCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="deadline"]`);
-                        const progressCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="progress"] text`);
-                        
-                        // 获取日期和进度
-                        const estStarted = estStartedCell ? estStartedCell.textContent.trim() : '';
-                        const deadline = deadlineCell ? deadlineCell.textContent.trim() : '';
-                        const progress = progressCell ? (parseInt(progressCell.textContent) / 100) : 0;
-                        
-                        // 确保日期格式正确
-                        const startDate = estStarted || new Date().toISOString().split('T')[0];
-                        const endDate = deadline || new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0];
-                        
-                        // 创建任务对象
-                        const task = {
-                            id: id,
-                            text: name,
-                            start_date: startDate,
-                            end_date: endDate,
-                            progress: progress,
-                            open: true
-                        };
-                        
-                        tasks.data.push(task);
-                        log(`添加任务: ${name}, ID: ${id}, 开始: ${startDate}, 结束: ${endDate}, 进度: ${progress}`);
-                    } catch (error) {
-                        log(`处理任务数据时出错: ${error.message}`);
+                const name = nameLink.textContent.trim();
+                const id = rowId;
+                
+                // 检查是否为子任务（但不影响显示）
+                const isChild = nameCell.querySelector('.dtable-cell-html span.label') !== null;
+                log(`任务 ${id} - ${name} ${isChild ? '是' : '不是'}子任务`);
+                
+                // 查找日期和进度信息
+                const estStartedCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="estStarted"]`);
+                const deadlineCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="deadline"]`);
+                const progressCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="progress"] text`);
+                const statusCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="status"]`);
+                
+                const estStarted = estStartedCell ? estStartedCell.textContent.trim() : '';
+                const deadline = deadlineCell ? deadlineCell.textContent.trim() : '';
+                const progress = progressCell ? (parseInt(progressCell.textContent) / 100) : 0;
+                const status = statusCell ? statusCell.textContent.trim() : '';
+                
+                log(`任务 ${id} 原始数据: 开始=${estStarted}, 结束=${deadline}, 状态=${status}`);
+                
+                // 根据任务状态设置默认日期
+                let startDate = formatDate(estStarted, false);
+                let endDate = formatDate(deadline, true);
+                
+                // 如果没有日期，根据状态设置默认值
+                if (!estStarted && !deadline) {
+                    const today = new Date();
+                    if (status === '已完成' || status === '已关闭') {
+                        // 已完成的任务默认设置为今天结束
+                        startDate = new Date(today.setDate(today.getDate() - 7)).toISOString().split('T')[0];
+                        endDate = new Date().toISOString().split('T')[0];
+                    } else if (status === '进行中') {
+                        // 进行中的任务从今天开始，持续7天
+                        startDate = new Date().toISOString().split('T')[0];
+                        endDate = new Date(today.setDate(today.getDate() + 7)).toISOString().split('T')[0];
+                    } else {
+                        // 其他状态的���务从明天开始，持续7天
+                        const tomorrow = new Date(today.setDate(today.getDate() + 1));
+                        startDate = tomorrow.toISOString().split('T')[0];
+                        endDate = new Date(tomorrow.setDate(tomorrow.getDate() + 7)).toISOString().split('T')[0];
                     }
                 }
-            });
+                
+                // 创建任务对象
+                const task = {
+                    id: id,
+                    text: name,
+                    start_date: startDate,
+                    end_date: endDate,
+                    progress: progress,
+                    open: true,
+                    status: status // 添加状态字段
+                };
+                
+                log(`任务 ${id} 最终日期: 开始=${task.start_date}, 结束=${task.end_date}`);
+                
+                // 确保结束日期不早于开始日期
+                if (task.end_date < task.start_date) {
+                    const startDate = new Date(task.start_date);
+                    startDate.setDate(startDate.getDate() + 7);
+                    task.end_date = startDate.toISOString().split('T')[0];
+                    log(`调整任务 ${id} 的结束日期: ${task.end_date}`);
+                }
+                
+                taskMap.set(id, task);
+                log(`成功添加任务: ${name}, ID: ${id}, 开始: ${task.start_date}, 结束: ${task.end_date}, 进度: ${progress}`);
+            } catch (error) {
+                log(`处理任务数据时出错: ${error.message}, 堆栈: ${error.stack}`);
+            }
+        });
+
+        // 将任务添加到数据数组
+        taskMap.forEach(task => {
+            tasks.data.push(task);
         });
 
         log(`总共处理了 ${tasks.data.length} 个任务`);
+        log('任务数据详情：' + JSON.stringify(tasks.data, null, 2));
         
         if (tasks.data.length === 0) {
             log('警告：没有找到任何任务数据');
             return;
         }
 
-        // 配置甘特图
-        gantt.config.date_format = "%Y-%m-%d";
-        gantt.config.scale_height = 50;
-        gantt.config.row_height = 30;
-        gantt.config.min_column_width = 40;
-        
-        // 设置时间刻度
-        gantt.config.scales = [
-            {unit: "month", step: 1, format: "%Y年 %m月"},
-            {unit: "day", step: 1, format: "%d日"}
-        ];
-
-        // 设置中文
-        gantt.i18n.setLocale({
-            date: {
-                month_full: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
-                month_short: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
-                day_full: ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
-                day_short: ["日", "一", "二", "三", "四", "五", "六"]
-            }
-        });
-
-        // 配置列显示
-        gantt.config.columns = [
-            {name: "text", label: "任务名称", tree: true, width: 200},
-            {name: "start_date", label: "开始时间", align: "center", width: 100},
-            {name: "end_date", label: "结束时间", align: "center", width: 100},
-            {name: "progress", label: "进度", align: "center", width: 80, template: function(obj) {
-                return Math.round(obj.progress * 100) + "%";
-            }}
-        ];
-
-        // 初始化甘特图
         try {
+            log('开始配置甘特图');
+            
+            // 配置甘特图
+            gantt.config.xml_date = "%Y-%m-%d";
+            gantt.config.date_format = "%Y-%m-%d";
+            gantt.config.date_grid = "%Y-%m-%d";
+            
+            // 优化显示配置
+            gantt.config.scale_height = 50;
+            gantt.config.row_height = 28;            // 减小行高以显示更多任务
+            gantt.config.task_height = 16;           // 减小任务高度
+            gantt.config.min_column_width = 30;      // 减小最小列宽
+            gantt.config.scale_unit = "day";         // 设置时间刻度单位为天
+            gantt.config.date_scale = "%d";          // 日期格式
+            gantt.config.subscales = [
+                {unit: "month", step: 1, date: "%Y年%m月"}
+            ];
+            
+            // 启用智能渲染以提高性能
+            gantt.config.smart_rendering = true;
+            gantt.config.smart_scales = true;
+            
+            // 设置滚动选项
+            gantt.config.scroll_size = 10;           // 滚动条大小
+            gantt.config.autosize = "y";             // 自动调整高度
+            gantt.config.fit_tasks = true;           // 自动适应任务
+            gantt.config.show_progress = true;       // 显示进度
+            gantt.config.show_task_cells = true;     // 显示任务单元格
+            gantt.config.show_links = false;         // 不显示任务链接线
+            gantt.config.show_markers = true;        // 显示标记
+            gantt.config.drag_progress = false;      // 禁止拖动进度条
+            gantt.config.drag_move = false;          // 禁止拖动移动
+            gantt.config.drag_resize = false;        // 禁止拖动调整大小
+            gantt.config.readonly = true;            // 只读模式
+            
+            // 设置中文
+            gantt.i18n.setLocale({
+                date: {
+                    month_full: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+                    month_short: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
+                    day_full: ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
+                    day_short: ["日", "一", "二", "三", "四", "五", "六"]
+                }
+            });
+            
+            // 配置列显示
+            gantt.config.columns = [
+                {name: "text", label: "任务名称", tree: true, width: 300, resize: true},
+                {name: "start_date", label: "开始时间", align: "center", width: 100, resize: true},
+                {name: "end_date", label: "结束时间", align: "center", width: 100, resize: true},
+                {name: "progress", label: "进度", align: "center", width: 80, resize: true, template: function(obj) {
+                    return Math.round(obj.progress * 100) + "%";
+                }},
+                {name: "status", label: "状态", align: "center", width: 80, resize: true}
+            ];
+
+            // 设置任务模板，根据状态显示不同颜色
+            gantt.templates.task_class = function(start, end, task) {
+                switch(task.status) {
+                    case '已完成':
+                    case '已关闭':
+                        return 'completed-task';
+                    case '进行中':
+                        return 'in-progress-task';
+                    case '未开始':
+                        return 'not-started-task';
+                    default:
+                        return '';
+                }
+            };
+
+            // 添加自定义样式
+            const customStyles = `
+                .completed-task .gantt_task_progress {
+                    background: #4CAF50;
+                }
+                .completed-task .gantt_task_line {
+                    background-color: #81C784;
+                }
+                .in-progress-task .gantt_task_progress {
+                    background: #2196F3;
+                }
+                .in-progress-task .gantt_task_line {
+                    background-color: #64B5F6;
+                }
+                .not-started-task .gantt_task_progress {
+                    background: #FFC107;
+                }
+                .not-started-task .gantt_task_line {
+                    background-color: #FFD54F;
+                }
+            `;
+            
+            const styleElement = document.createElement('style');
+            styleElement.textContent = customStyles;
+            document.head.appendChild(styleElement);
+            
+            log('初始化甘特图');
             gantt.clearAll(); // 清除现有数据
             gantt.init(container);
+            
+            log('解析任务数据');
             gantt.parse(tasks);
             log('甘特图初始化成功，数据已加载');
             
-            // 调整时间范围以适应所有任务
-            gantt.fit();
+            // 调整视图
+            try {
+                log('尝试调整甘特图视图');
+                gantt.render();
+                gantt.showDate(new Date()); // 显示当前日期
+                gantt.expandAll(); // 展开所有任务
+                
+                // 设置滚动区域高度
+                const ganttDataArea = container.querySelector('.gantt_data_area');
+                if (ganttDataArea) {
+                    ganttDataArea.style.height = Math.min(tasks.data.length * gantt.config.row_height + 50, 800) + 'px';
+                    ganttDataArea.style.overflowY = 'auto';
+                }
+                
+                log('重新渲染甘特图完成');
+            } catch (viewError) {
+                log(`调整视图时出错: ${viewError.message}`);
+            }
         } catch (error) {
-            log(`甘特图初始化失败: ${error.message}`);
+            log(`甘特图初始化失败: ${error.message}, 堆栈: ${error.stack}`);
         }
     }
 
