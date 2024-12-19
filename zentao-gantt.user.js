@@ -194,6 +194,26 @@
         .gantt_hor_scroll::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+        /* 任务链接样式 */
+        .gantt-task-link {
+            color: #006af1;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .gantt-task-link:hover {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+
+        /* 防止链接点击时关闭模态框 */
+        .gantt_tree_content {
+            pointer-events: all;
+        }
+
+        .gantt_row {
+            cursor: default;
+        }
     `);
 
     // 创建日志面板
@@ -616,7 +636,19 @@
             
             // 配置列显示
             gantt.config.columns = [
-                {name: "text", label: "任务名称", tree: true, width: 300, resize: true},
+                {
+                    name: "text", 
+                    label: "任务名称", 
+                    tree: true, 
+                    width: 300, 
+                    resize: true,
+                    template: function(task) {
+                        // 构建正确格式的任务链接
+                        const baseUrl = window.location.origin;
+                        const taskUrl = `${baseUrl}/index.php?m=task&f=view&taskID=${task.id}`;
+                        return `<a href="${taskUrl}" class="gantt-task-link" target="_blank" title="${task.text}">${task.text}</a>`;
+                    }
+                },
                 {name: "start_date", label: "开始时间", align: "center", width: 100, resize: true},
                 {name: "end_date", label: "结束时间", align: "center", width: 100, resize: true},
                 {name: "progress", label: "进度", align: "center", width: 80, resize: true, template: function(obj) {
@@ -731,6 +763,31 @@
             gantt.attachEvent("onGanttScroll", function(left, top) {
                 log(`甘特图滚动: left=${left}, top=${top}`);
             });
+
+            // 添加任务点击事件处理
+            gantt.attachEvent("onTaskClick", function(id, e) {
+                // 阻止事件冒泡，防止关闭模态框
+                e.stopPropagation();
+                
+                // 如果点击的是链接，让链接自己处理
+                if (e.target.classList.contains('gantt-task-link')) {
+                    return true;
+                }
+                
+                // 如果点击的是其他区域，可以添加其他处理逻辑
+                return true;
+            });
+
+            // 添加双击事件处理（可选）
+            gantt.attachEvent("onTaskDblClick", function(id, e) {
+                e.stopPropagation();
+                const task = gantt.getTask(id);
+                const baseUrl = window.location.origin;
+                const taskUrl = `${baseUrl}/index.php?m=task&f=view&taskID=${task.id}`;
+                window.open(taskUrl, '_blank');
+                return false; // 阻止默认行为
+            });
+
         } catch (error) {
             log(`甘特图初始化失败: ${error.message}, 堆栈: ${error.stack}`);
         }
