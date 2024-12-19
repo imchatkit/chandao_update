@@ -154,59 +154,80 @@
         log('切换甘特图显示');
         const container = document.getElementById('gantt-container');
         if (container) {
-            container.style.display = container.style.display === 'none' ? 'block' : 'none';
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                // 显示时初始化甘特图
+                initializeGanttChart(container);
+            } else {
+                container.style.display = 'none';
+            }
         }
     }
 
-    // 初始化甘特图
-    function initGantt() {
-        log('开始初始化甘特图');
+    // 添加甘特图初始化函数
+    function initializeGanttChart(container) {
+        log('初始化甘特图内容');
+        
+        // 获取任务数据
+        const tasks = {
+            data: []
+        };
+        
+        // 从表格中获取任务数据
+        const taskTable = document.querySelector('#table-execution-task');
+        if (!taskTable) {
+            log('未找到任务表格');
+            return;
+        }
 
-        // 直接尝试查找工具栏
-        waitForElement('#actionBar', (toolbar) => {
-            const button = createGanttButton();
-            if (button) {
-                // 检查是否已经添加过按钮
-                const existingButton = toolbar.querySelector('#gantt-chart-btn');
-                if (existingButton) {
-                    log('按钮已存在于当前文档中');
-                    return;
-                }
+        const rows = taskTable.querySelectorAll('.dtable-row');
+        log(`找到 ${rows.length} 个任务行`);
 
-                // 将按钮添加到工具栏的第一个位置
-                const firstChild = toolbar.firstChild;
-                if (firstChild) {
-                    toolbar.insertBefore(button, firstChild);
-                } else {
-                    toolbar.appendChild(button);
-                }
-                log('按钮已添加到工具栏');
+        rows.forEach((row, index) => {
+            const id = row.getAttribute('data-id');
+            if (!id) return;
 
-                // 创建甘特图容器
-                let container = document.getElementById('gantt-container');
-                if (!container) {
-                    container = document.createElement('div');
-                    container.id = 'gantt-container';
-                    container.style.display = 'none';
+            const nameCell = row.querySelector('[data-col="name"]');
+            const startCell = row.querySelector('[data-col="estStarted"]');
+            const deadlineCell = row.querySelector('[data-col="deadline"]');
+            const progressCell = row.querySelector('[data-col="progress"]');
 
-                    // 将容器插入到mainContent的开头
-                    const mainContent = document.querySelector('#mainContent');
-                    if (mainContent) {
-                        mainContent.insertBefore(container, mainContent.firstChild);
-                        log('甘特图容器已创建并添加到页面');
-                    }
-                }
+            const name = nameCell ? nameCell.textContent.trim() : `Task ${id}`;
+            const start = startCell ? startCell.textContent.trim() : new Date().toISOString().split('T')[0];
+            const deadline = deadlineCell ? deadlineCell.textContent.trim() : '';
+            const progress = progressCell ? parseInt(progressCell.textContent) / 100 : 0;
 
-                // 加载甘特图样式
-                if (!document.querySelector('link[href*="dhtmlxgantt.css"]')) {
-                    const link = document.createElement('link');
-                    link.rel = 'stylesheet';
-                    link.href = 'https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.css';
-                    document.head.appendChild(link);
-                    log('甘特图样式已加载');
-                }
-            }
+            tasks.data.push({
+                id: id,
+                text: name,
+                start_date: start || new Date().toISOString().split('T')[0],
+                end_date: deadline || new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
+                progress: progress,
+                open: true
+            });
         });
+
+        log(`处理完成 ${tasks.data.length} 个任务数据`);
+
+        // 配置甘特图
+        gantt.config.date_format = "%Y-%m-%d";
+        gantt.config.scale_height = 50;
+        gantt.config.scales = [
+            {unit: "month", step: 1, format: "%Y年 %m月"},
+            {unit: "day", step: 1, format: "%d日"}
+        ];
+
+        // 设置中文
+        gantt.i18n.setLocale('cn');
+
+        // 初始化甘特图
+        try {
+            gantt.init(container);
+            gantt.parse(tasks);
+            log('甘特图初始化成功');
+        } catch (error) {
+            log(`甘特图初始化失败: ${error.message}`);
+        }
     }
 
     // 检查是否应该初始化
@@ -215,9 +236,23 @@
         const params = new URLSearchParams(window.location.search);
         let module = params.get('m');
         let method = params.get('f');
+        
+        // 处理跳转页面的情况
+        const openParam = params.get('open');
+        if (openParam) {
+            try {
+                // 解码 base64 参数
+                const decodedUrl = atob(openParam);
+                const targetParams = new URLSearchParams(decodedUrl.split('?')[1]);
+                module = targetParams.get('m') || module;
+                method = targetParams.get('f') || method;
+            } catch (e) {
+                log(`解析open参数失败: ${e.message}`);
+            }
+        }
 
         log(`当前URL: ${url}`);
-        log(`当前模块: ${module}, 当前方法: ${method}`);
+        log(`实际模块: ${module}, 实际方法: ${method}`);
 
         // 只在执行和项目模块的任务列表页面初始化
         const validModules = ['execution', 'project'];
@@ -279,6 +314,80 @@
         } else {
             log('当前页面不需要初始化甘特图');
         }
+    }
+
+    // 修改 initGantt 函数
+    function initGantt() {
+        log('开始初始化甘特图');
+
+        // 等待页面完全加载
+        setTimeout(() => {
+            // 首先尝试在主文档中查找
+            let toolbar = document.querySelector('#actionBar');
+            let mainContent = document.querySelector('#mainContent');
+
+            // 如果在主文档中没找到，则查找所有 iframe
+            if (!toolbar || !mainContent) {
+                const frames = Array.from(document.querySelectorAll('iframe'));
+                for (const frame of frames) {
+                    try {
+                        const frameDoc = frame.contentDocument || frame.contentWindow.document;
+                        toolbar = frameDoc.querySelector('#actionBar');
+                        mainContent = frameDoc.querySelector('#mainContent');
+                        if (toolbar && mainContent) {
+                            log('在iframe中找到工具栏和主内容区');
+                            break;
+                        }
+                    } catch (e) {
+                        log(`无法访问iframe: ${e.message}`);
+                    }
+                }
+            }
+
+            if (toolbar && mainContent) {
+                const button = createGanttButton();
+                if (button) {
+                    // 检查是否已经添加过按钮
+                    const existingButton = toolbar.querySelector('#gantt-chart-btn');
+                    if (existingButton) {
+                        log('按钮已存在于当前文档中');
+                        return;
+                    }
+
+                    // 将按钮添加到工具栏的第一个位置
+                    const firstChild = toolbar.firstChild;
+                    if (firstChild) {
+                        toolbar.insertBefore(button, firstChild);
+                    } else {
+                        toolbar.appendChild(button);
+                    }
+                    log('按钮已添加到工具栏');
+
+                    // 创建甘特图容器
+                    let container = mainContent.querySelector('#gantt-container');
+                    if (!container) {
+                        container = document.createElement('div');
+                        container.id = 'gantt-container';
+                        container.style.display = 'none';
+
+                        // 将容器插入到mainContent的开头
+                        mainContent.insertBefore(container, mainContent.firstChild);
+                        log('甘特图容器已创建并添加到页面');
+                    }
+
+                    // 加载甘特图样式
+                    if (!document.querySelector('link[href*="dhtmlxgantt.css"]')) {
+                        const link = document.createElement('link');
+                        link.rel = 'stylesheet';
+                        link.href = 'https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.css';
+                        document.head.appendChild(link);
+                        log('甘特图样式已加载');
+                    }
+                }
+            } else {
+                log('未找到工具栏或主内容区');
+            }
+        }, 1000); // 等待1秒确保页面加载完成
     }
 
     // 启动脚本
