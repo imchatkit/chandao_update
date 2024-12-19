@@ -21,7 +21,7 @@
     const QUIET_PERIOD = 500; // 500ms内没有新请求就认为加载完成
     let isInitialized = false; // 添加初始化标志
 
-    // 在文件开头添加日期处理函数
+    // 修改日期处理函数
     function formatDate(dateStr, isEndDate = false) {
         // 如果日期为空，返回合适的默认值
         if (!dateStr || dateStr.trim() === '') {
@@ -33,9 +33,14 @@
             return today.toISOString().split('T')[0];
         }
         
-        // 如果是"今日"，返回当前日期
+        // 处理特殊日期文本
         if (dateStr === '今日') {
             return new Date().toISOString().split('T')[0];
+        }
+        if (dateStr === '昨日') {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            return yesterday.toISOString().split('T')[0];
         }
 
         // 处理禅道的日期格式（例如：2023-12-19）
