@@ -248,6 +248,14 @@
         .status-pause {
             background-color: #FF9800;
         }
+
+        /* 指派人样式 */
+        .assigned-user {
+            color: #006af1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background-color: rgba(0, 106, 241, 0.1);
+        }
     `);
 
     // 创建日志面板
@@ -603,7 +611,7 @@
                             progress: task.progress || 0,
                             open: true,
                             status: task.status,
-                            assignedTo: task.assignedTo || task.assignedToRealName || task.assignedToName || '',
+                            assignedTo: task.assignedToRealName || task.realname || task.assignedTo || '-',
                         };
 
                         tasks.data.push(ganttTask);
@@ -693,7 +701,10 @@
                     width: 80, 
                     resize: true,
                     template: function(task) {
-                        return task.assignedTo || '-';
+                        if (!task.assignedTo || task.assignedTo === '-') {
+                            return '<span style="color: #999;">未指派</span>';
+                        }
+                        return `<span class="assigned-user">${task.assignedTo}</span>`;
                     }
                 },
                 {
