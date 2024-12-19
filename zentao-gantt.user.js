@@ -1,3 +1,4 @@
+// ==UserScript==
 
 // @name         禅道甘特图插件
 // @namespace    http://tampermonkey.net/
