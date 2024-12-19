@@ -356,120 +356,88 @@
         const tasks = {
             data: []
         };
-        
-        // 从表格中获取任务数据
-        const taskTable = doc.querySelector('.dtable');
+
+        // 查找任务表格
+        const taskTable = doc.querySelector('#table-execution-task');
+        log(`找到任务表格: ${taskTable ? '是' : '否'}`);
+
         if (!taskTable) {
-            log('未找到任务表格');
-            return;
+            log('未找到任务表格，尝试在所有iframe中查找');
+            const frames = Array.from(document.querySelectorAll('iframe'));
+            for (const frame of frames) {
+                try {
+                    const frameDoc = frame.contentDocument || frame.contentWindow.document;
+                    const frameTable = frameDoc.querySelector('#table-execution-task');
+                    if (frameTable) {
+                        log('在iframe中找到任务表格');
+                        doc = frameDoc;
+                        break;
+                    }
+                } catch (e) {
+                    log(`无法访问iframe: ${e.message}`);
+                }
+            }
         }
 
         // 获取所有任务行
-        const taskCells = doc.querySelectorAll('.dtable-cell[data-col="name"]');
-        log(`找到任务单元格数量: ${taskCells.length}`);
+        const taskRows = doc.querySelectorAll('.dtable-cell[data-col="name"]');
+        log(`找到任务单元格数量: ${taskRows.length}`);
 
-        if (!taskCells || taskCells.length === 0) {
-            log('未找到任务单元格');
-            return;
-        }
-
-        // 创建任务映射表
-        const taskMap = new Map();
-
-        // 收集所有任务
-        taskCells.forEach((nameCell, index) => {
+        // 遍历每个任务行
+        taskRows.forEach((nameCell, index) => {
             try {
                 const rowId = nameCell.getAttribute('data-row');
                 if (!rowId) {
-                    log(`第 ${index + 1} 个单元格没有行ID`);
+                    log(`第 ${index + 1} 个单元格没有data-row属性`);
                     return;
                 }
 
+                // 获取任务名称
                 const nameLink = nameCell.querySelector('a');
                 if (!nameLink) {
                     log(`任务 ${rowId} 没有找到名称链接`);
                     return;
                 }
-                
                 const name = nameLink.textContent.trim();
-                const id = rowId;
-                
-                // 检查是否为子任务（但不影响显示）
-                const isChild = nameCell.querySelector('.dtable-cell-html span.label') !== null;
-                log(`任务 ${id} - ${name} ${isChild ? '是' : '不是'}子任务`);
-                
-                // 查找日期和进度信息
-                const estStartedCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="estStarted"]`);
-                const deadlineCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="deadline"]`);
-                const progressCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="progress"] text`);
-                const statusCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="status"]`);
-                
+
+                // 获取日期和进度信息
+                const estStartedCell = doc.querySelector(`.dtable-cell[data-row="${rowId}"][data-col="estStarted"]`);
+                const deadlineCell = doc.querySelector(`.dtable-cell[data-row="${rowId}"][data-col="deadline"]`);
+                const progressCell = doc.querySelector(`.dtable-cell[data-row="${rowId}"][data-col="progress"] text`);
+                const statusCell = doc.querySelector(`.dtable-cell[data-row="${rowId}"][data-col="status"] span`);
+
                 const estStarted = estStartedCell ? estStartedCell.textContent.trim() : '';
                 const deadline = deadlineCell ? deadlineCell.textContent.trim() : '';
                 const progress = progressCell ? (parseInt(progressCell.textContent) / 100) : 0;
                 const status = statusCell ? statusCell.textContent.trim() : '';
-                
-                log(`任务 ${id} 原始数据: 开始=${estStarted}, 结束=${deadline}, 状态=${status}`);
-                
-                // 根据任务状态设置默认日期
-                let startDate = formatDate(estStarted, false);
-                let endDate = formatDate(deadline, true);
-                
-                // 如果没有日期，根据状态设置默认值
-                if (!estStarted && !deadline) {
-                    const today = new Date();
-                    if (status === '已完成' || status === '已关闭') {
-                        // 已完成的任务默认设置为今天结束
-                        startDate = new Date(today.setDate(today.getDate() - 7)).toISOString().split('T')[0];
-                        endDate = new Date().toISOString().split('T')[0];
-                    } else if (status === '进行中') {
-                        // 进行中的任务从今天开始，持续7天
-                        startDate = new Date().toISOString().split('T')[0];
-                        endDate = new Date(today.setDate(today.getDate() + 7)).toISOString().split('T')[0];
-                    } else {
-                        // 其他状态的���务从明天开始，持续7天
-                        const tomorrow = new Date(today.setDate(today.getDate() + 1));
-                        startDate = tomorrow.toISOString().split('T')[0];
-                        endDate = new Date(tomorrow.setDate(tomorrow.getDate() + 7)).toISOString().split('T')[0];
-                    }
-                }
-                
+
+                log(`解析任务: ID=${rowId}, 名称=${name}, 开始=${estStarted}, 结束=${deadline}, 进度=${progress}, 状态=${status}`);
+
+                // 处理日期
+                const startDate = formatDate(estStarted, false);
+                const endDate = formatDate(deadline, true);
+
                 // 创建任务对象
                 const task = {
-                    id: id,
+                    id: rowId,
                     text: name,
                     start_date: startDate,
                     end_date: endDate,
                     progress: progress,
                     open: true,
-                    status: status // 添加状态字段
+                    status: status
                 };
-                
-                log(`任务 ${id} 最终日期: 开始=${task.start_date}, 结束=${task.end_date}`);
-                
-                // 确保结束日期不早于开始日期
-                if (task.end_date < task.start_date) {
-                    const startDate = new Date(task.start_date);
-                    startDate.setDate(startDate.getDate() + 7);
-                    task.end_date = startDate.toISOString().split('T')[0];
-                    log(`调整任务 ${id} 的结束日期: ${task.end_date}`);
-                }
-                
-                taskMap.set(id, task);
-                log(`成功添加任务: ${name}, ID: ${id}, 开始: ${task.start_date}, 结束: ${task.end_date}, 进度: ${progress}`);
+
+                tasks.data.push(task);
+                log(`成功添加任务: ${name}`);
             } catch (error) {
-                log(`处理任务数据时出错: ${error.message}, 堆栈: ${error.stack}`);
+                log(`处理任务行时出错: ${error.message}`);
             }
         });
 
-        // 将任务添加到数据数组
-        taskMap.forEach(task => {
-            tasks.data.push(task);
-        });
+        log(`总共收集到 ${tasks.data.length} 个任务`);
+        log('任务数据：' + JSON.stringify(tasks.data, null, 2));
 
-        log(`总共处理了 ${tasks.data.length} 个任务`);
-        log('任务数据详情：' + JSON.stringify(tasks.data, null, 2));
-        
         if (tasks.data.length === 0) {
             log('警告：没有找到任何任务数据');
             return;
