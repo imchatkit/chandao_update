@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      0.9
 // @description  在禅道执行页面添加甘特图展示
-// @author       Your Name
+// @author       何威 邮箱hwe1233@163.com
 // @match        http://192.168.110.9:90/**
 // @grant        GM_addStyle
 // @grant        unsafeWindow
@@ -17,8 +17,8 @@
     let ajaxRequestCount = 0;
     let lastRequestTime = 0;
     let initializationTimer = null;
-    const INITIALIZATION_DELAY = 1000; // 等待1秒后初始化
-    const QUIET_PERIOD = 500; // 500ms内没有新请求就认为加载完成
+    const INITIALIZATION_DELAY = 300; // 等待300ms后初始化
+    const QUIET_PERIOD = 200; // 200ms内没有新请求就认为加载完成
     let isInitialized = false; // 添加初始化标志
 
     // 修改日期处理函数
