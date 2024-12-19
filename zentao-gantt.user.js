@@ -1,9 +1,9 @@
-// ==UserScript==
+
 // @name         禅道甘特图插件
 // @namespace    http://tampermonkey.net/
 // @version      0.9
-// @description  在禅道执行页面添加甘特图展示
-// @author       何威 邮箱hwe1233@163.com
+// @description  在禅道执行页面添加甘特图展示  gitHUb地址：https://github.com/imchatkit/chandao_update
+// @author       何威 邮箱hwe1233@163.com 
 // @match        http://192.168.110.9:90/**
 // @grant        GM_addStyle
 // @grant        unsafeWindow

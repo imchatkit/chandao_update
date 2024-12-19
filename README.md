@@ -2,6 +2,8 @@
 
 一个用于禅道项目管理系统的浏览器插件，为任务列表页面添加甘特图展示功能。
 
+gitHUb地址：https://github.com/imchatkit/chandao_update
+
 ## 新增功能
 
 ### 1. 列筛选功能
