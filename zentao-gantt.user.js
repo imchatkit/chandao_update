@@ -472,7 +472,7 @@
             
             initializeGanttChart(container, taskDoc);
         } else {
-            log('未找到甘���图容器');
+            log('未找到甘特图容器');
         }
     }
 
@@ -877,12 +877,14 @@
                 return false; // 阻止默认行为
             });
 
-            // 添加列头点击事件
+            // 修改 initFilters 函数中的筛选框部分
             gantt.attachEvent("onGridHeaderClick", function(name, e) {
+                const column = gantt.getGridColumn(name);
+                if (!column) return;
+
                 const header = e.target.closest(".gantt_grid_head_cell");
                 if (!header) return;
 
-                // 获取当前列的所有唯一值
                 const values = new Set();
                 gantt.getTaskByTime().forEach(task => {
                     let value = task[name];
@@ -904,62 +906,50 @@
                     if (value) values.add(value);
                 });
 
-                // 创建筛选下拉框
-                const filterPopup = document.createElement('div');
-                filterPopup.className = 'gantt-filter-popup';
-                filterPopup.innerHTML = `
-                    <div class="filter-header">
-                        <input type="text" placeholder="搜索..." class="filter-search">
-                        <div class="filter-actions">
-                            <label><input type="checkbox" class="select-all" checked> 全选</label>
-                            <button class="apply-filter">应用</button>
+                const filterContainer = document.createElement("div");
+                filterContainer.className = "column-filter-container";
+                filterContainer.innerHTML = `
+                    <div class="filter-list">
+                        <div class="filter-item">
+                            <label><input type="checkbox" value="" checked> 全部</label>
                         </div>
-                    </div>
-                    <div class="filter-options">
                         ${Array.from(values).map(value => `
-                            <label class="filter-option">
-                                <input type="checkbox" value="${value}" checked>
-                                <span>${value}</span>
-                            </label>
-                        `).join('')}
+                            <div class="filter-item">
+                                <label><input type="checkbox" value="${value}"> ${value}</label>
+                            </div>
+                        `).join("")}
+                    </div>
+                    <div class="filter-actions">
+                        <button class="apply-filter">确定</button>
+                        <button class="cancel-filter">取消</button>
                     </div>
                 `;
 
                 // 定位筛选框
                 const rect = header.getBoundingClientRect();
-                filterPopup.style.position = 'absolute';
-                filterPopup.style.top = `${rect.bottom}px`;
-                filterPopup.style.left = `${rect.left}px`;
-                filterPopup.style.zIndex = '100000'; // 确保在最上层
-                document.body.appendChild(filterPopup);
+                filterContainer.style.position = "absolute";
+                filterContainer.style.top = rect.bottom + "px";
+                filterContainer.style.left = rect.left + "px";
+                filterContainer.style.zIndex = "100000";
+                document.body.appendChild(filterContainer);
 
-                // 阻止事件冒泡
-                e.stopPropagation();
-                e.preventDefault();
-
-                // 搜索功能
-                const searchInput = filterPopup.querySelector('.filter-search');
-                searchInput.addEventListener('input', (e) => {
-                    const searchText = e.target.value.toLowerCase();
-                    filterPopup.querySelectorAll('.filter-option').forEach(option => {
-                        const text = option.textContent.toLowerCase();
-                        option.style.display = text.includes(searchText) ? '' : 'none';
+                // 处理全选/取消全选
+                const allCheckbox = filterContainer.querySelector('input[value=""]');
+                const otherCheckboxes = filterContainer.querySelectorAll('input[type="checkbox"]:not([value=""])');
+                
+                allCheckbox.addEventListener('change', function() {
+                    otherCheckboxes.forEach(cb => {
+                        cb.checked = this.checked;
                     });
                 });
 
-                // 全选功能
-                const selectAll = filterPopup.querySelector('.select-all');
-                selectAll.addEventListener('change', (e) => {
-                    filterPopup.querySelectorAll('.filter-option input').forEach(checkbox => {
-                        checkbox.checked = e.target.checked;
-                    });
-                });
-
-                // 应用筛选
-                filterPopup.querySelector('.apply-filter').addEventListener('click', () => {
+                // 确定按钮点击事件
+                filterContainer.querySelector('.apply-filter').addEventListener('click', () => {
                     const selectedValues = new Set();
-                    filterPopup.querySelectorAll('.filter-option input:checked').forEach(checkbox => {
-                        selectedValues.add(checkbox.value);
+                    otherCheckboxes.forEach(cb => {
+                        if (cb.checked) {
+                            selectedValues.add(cb.value);
+                        }
                     });
 
                     // 筛选任务
@@ -981,16 +971,21 @@
                         } else if (name === "assignedTo") {
                             value = task.assignedTo || '未指派';
                         }
-                        return selectedValues.has(value);
+                        return allCheckbox.checked || selectedValues.has(value);
                     });
                     gantt.parse({data: filteredTasks});
-                    filterPopup.remove();
+                    filterContainer.remove();
                 });
 
-                // 点击外部关闭
+                // 取消按钮点击事件
+                filterContainer.querySelector('.cancel-filter').addEventListener('click', () => {
+                    filterContainer.remove();
+                });
+
+                // 点击其他地方关闭筛选框
                 document.addEventListener('click', function closeFilter(e) {
-                    if (!filterPopup.contains(e.target) && !header.contains(e.target)) {
-                        filterPopup.remove();
+                    if (!filterContainer.contains(e.target) && !header.contains(e.target)) {
+                        filterContainer.remove();
                         document.removeEventListener('click', closeFilter);
                     }
                 });
@@ -1258,6 +1253,10 @@
                             </div>
                         `).join("")}
                     </div>
+                    <div class="filter-actions">
+                        <button class="apply-filter">确定</button>
+                        <button class="cancel-filter">取消</button>
+                    </div>
                 `;
 
                 // 定位筛选框
@@ -1265,33 +1264,48 @@
                 filterContainer.style.position = "absolute";
                 filterContainer.style.top = rect.bottom + "px";
                 filterContainer.style.left = rect.left + "px";
+                filterContainer.style.zIndex = "100000";
                 document.body.appendChild(filterContainer);
 
-                // 处理筛选事件
-                const checkboxes = filterContainer.querySelectorAll("input[type=checkbox]");
-                checkboxes.forEach(checkbox => {
-                    checkbox.addEventListener("change", function() {
-                        const selectedValues = new Set();
-                        checkboxes.forEach(cb => {
-                            if (cb.checked && cb.value) {
-                                selectedValues.add(cb.value);
-                            }
-                        });
-
-                        gantt.clearAll();
-                        const filteredTasks = tasks.data.filter(task => {
-                            if (checkboxes[0].checked) return true; // "全部"被选中
-                            return selectedValues.has(task[name]);
-                        });
-                        gantt.parse({data: filteredTasks});
+                // 处理全选/取消全选
+                const allCheckbox = filterContainer.querySelector('input[value=""]');
+                const otherCheckboxes = filterContainer.querySelectorAll('input[type="checkbox"]:not([value=""])');
+                
+                allCheckbox.addEventListener('change', function() {
+                    otherCheckboxes.forEach(cb => {
+                        cb.checked = this.checked;
                     });
                 });
 
+                // 确定按钮点击事件
+                filterContainer.querySelector('.apply-filter').addEventListener('click', () => {
+                    const selectedValues = new Set();
+                    otherCheckboxes.forEach(cb => {
+                        if (cb.checked) {
+                            selectedValues.add(cb.value);
+                        }
+                    });
+
+                    // 筛选任务
+                    gantt.clearAll();
+                    const filteredTasks = tasks.data.filter(task => {
+                        if (checkboxes[0].checked) return true; // "全部"被选中
+                        return selectedValues.has(task[name]);
+                    });
+                    gantt.parse({data: filteredTasks});
+                    filterContainer.remove();
+                });
+
+                // 取消按钮点击事件
+                filterContainer.querySelector('.cancel-filter').addEventListener('click', () => {
+                    filterContainer.remove();
+                });
+
                 // 点击其他地方关闭筛选框
-                document.addEventListener("click", function closeFilter(e) {
+                document.addEventListener('click', function closeFilter(e) {
                     if (!filterContainer.contains(e.target) && !header.contains(e.target)) {
                         filterContainer.remove();
-                        document.removeEventListener("click", closeFilter);
+                        document.removeEventListener('click', closeFilter);
                     }
                 });
             });
@@ -1317,6 +1331,7 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
+            margin-bottom: 8px;
         }
         .filter-item {
             white-space: nowrap;
@@ -1330,6 +1345,33 @@
             align-items: center;
             gap: 4px;
             cursor: pointer;
+        }
+        .filter-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #eee;
+        }
+        .apply-filter, .cancel-filter {
+            padding: 4px 12px;
+            border-radius: 3px;
+            border: 1px solid #ddd;
+            cursor: pointer;
+        }
+        .apply-filter {
+            background: #006af1;
+            color: white;
+            border-color: #006af1;
+        }
+        .apply-filter:hover {
+            background: #0056b3;
+        }
+        .cancel-filter {
+            background: white;
+        }
+        .cancel-filter:hover {
+            background: #f5f5f5;
         }
     `);
 
