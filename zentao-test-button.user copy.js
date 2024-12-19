@@ -152,20 +152,46 @@
     // 切换甘特图显示
     function toggleGanttChart() {
         log('切换甘特图显示');
-        const container = document.getElementById('gantt-container');
+        
+        // 查找所有 iframe
+        const frames = Array.from(document.querySelectorAll('iframe'));
+        let container = null;
+        let frameDoc = null;
+        
+        // 首先在主文档中查找
+        container = document.getElementById('gantt-container');
+        
+        // 如果主文档中没有找到，则在 iframe 中查找
+        if (!container) {
+            for (const frame of frames) {
+                try {
+                    frameDoc = frame.contentDocument || frame.contentWindow.document;
+                    container = frameDoc.getElementById('gantt-container');
+                    if (container) {
+                        log('在iframe中找到甘特图容器');
+                        break;
+                    }
+                } catch (e) {
+                    log(`无法访问iframe: ${e.message}`);
+                }
+            }
+        }
+
         if (container) {
             if (container.style.display === 'none') {
                 container.style.display = 'block';
                 // 显示时初始化甘特图
-                initializeGanttChart(container);
+                initializeGanttChart(container, frameDoc || document);
             } else {
                 container.style.display = 'none';
             }
+        } else {
+            log('未找到甘特图容器');
         }
     }
 
-    // 添加甘特图初始化函数
-    function initializeGanttChart(container) {
+    // 修改 initializeGanttChart 函数
+    function initializeGanttChart(container, doc) {
         log('初始化甘特图内容');
         
         // 获取任务数据
@@ -174,37 +200,54 @@
         };
         
         // 从表格中获取任务数据
-        const taskTable = document.querySelector('#table-execution-task');
-        if (!taskTable) {
-            log('未找到任务表格');
+        const taskCells = doc.querySelectorAll('.dtable-cell[data-col="name"]');
+        if (!taskCells || taskCells.length === 0) {
+            log('未找到任务单元格');
             return;
         }
 
-        const rows = taskTable.querySelectorAll('.dtable-row');
-        log(`找到 ${rows.length} 个任务行`);
+        log(`找到 ${taskCells.length} 个任务单元格`);
 
-        rows.forEach((row, index) => {
-            const id = row.getAttribute('data-id');
-            if (!id) return;
+        taskCells.forEach((cell) => {
+            try {
+                const row = cell.closest('.dtable-row');
+                if (!row) return;
 
-            const nameCell = row.querySelector('[data-col="name"]');
-            const startCell = row.querySelector('[data-col="estStarted"]');
-            const deadlineCell = row.querySelector('[data-col="deadline"]');
-            const progressCell = row.querySelector('[data-col="progress"]');
+                const id = row.getAttribute('data-id');
+                if (!id) return;
 
-            const name = nameCell ? nameCell.textContent.trim() : `Task ${id}`;
-            const start = startCell ? startCell.textContent.trim() : new Date().toISOString().split('T')[0];
-            const deadline = deadlineCell ? deadlineCell.textContent.trim() : '';
-            const progress = progressCell ? parseInt(progressCell.textContent) / 100 : 0;
+                const nameLink = cell.querySelector('a');
+                const name = nameLink ? nameLink.textContent.trim() : '';
 
-            tasks.data.push({
-                id: id,
-                text: name,
-                start_date: start || new Date().toISOString().split('T')[0],
-                end_date: deadline || new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
-                progress: progress,
-                open: true
-            });
+                const estStartedCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="estStarted"]`);
+                const deadlineCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="deadline"]`);
+                const progressCell = doc.querySelector(`.dtable-cell[data-row="${id}"][data-col="progress"]`);
+
+                const estStarted = estStartedCell ? estStartedCell.textContent.trim() : '';
+                const deadline = deadlineCell ? deadlineCell.textContent.trim() : '';
+                let progress = 0;
+
+                if (progressCell) {
+                    const progressText = progressCell.querySelector('text');
+                    if (progressText) {
+                        progress = parseInt(progressText.textContent) / 100;
+                    }
+                }
+
+                const taskData = {
+                    id: id,
+                    text: name || `Task ${id}`,
+                    start_date: estStarted || new Date().toISOString().split('T')[0],
+                    end_date: deadline || new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
+                    progress: progress,
+                    open: true
+                };
+
+                tasks.data.push(taskData);
+                log(`添加任务: ${taskData.text}, 开始: ${taskData.start_date}, 结束: ${taskData.end_date}, 进度: ${taskData.progress}`);
+            } catch (error) {
+                log(`处理任务行时出错: ${error.message}`);
+            }
         });
 
         log(`处理完成 ${tasks.data.length} 个任务数据`);
@@ -212,13 +255,32 @@
         // 配置甘特图
         gantt.config.date_format = "%Y-%m-%d";
         gantt.config.scale_height = 50;
+        gantt.config.row_height = 30;
+        gantt.config.min_column_width = 40;
         gantt.config.scales = [
             {unit: "month", step: 1, format: "%Y年 %m月"},
             {unit: "day", step: 1, format: "%d日"}
         ];
 
         // 设置中文
-        gantt.i18n.setLocale('cn');
+        gantt.i18n.setLocale({
+            date: {
+                month_full: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+                month_short: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
+                day_full: ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
+                day_short: ["日", "一", "二", "三", "四", "五", "六"]
+            }
+        });
+
+        // 配置甘特图显示
+        gantt.config.columns = [
+            {name: "text", label: "任务名称", tree: true, width: 200},
+            {name: "start_date", label: "开始时间", align: "center", width: 100},
+            {name: "end_date", label: "结束时间", align: "center", width: 100},
+            {name: "progress", label: "进度", align: "center", width: 80, template: function(obj) {
+                return Math.round(obj.progress * 100) + "%";
+            }}
+        ];
 
         // 初始化甘特图
         try {
