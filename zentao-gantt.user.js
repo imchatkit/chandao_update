@@ -126,7 +126,7 @@
             flex-direction: column;
         }
         .gantt-modal-header {
-            padding: 10px 15px;
+            padding: 5px 15px;
             background: #f5f5f5;
             border-bottom: 1px solid #ddd;
             display: flex;
@@ -134,7 +134,7 @@
             align-items: center;
         }
         .gantt-modal-title {
-            font-size: 18px;
+            font-size: 15px;
             font-weight: bold;
             color: #333;
         }
@@ -213,6 +213,40 @@
 
         .gantt_row {
             cursor: default;
+        }
+
+        /* 状态标签样式 */
+        .status-tag {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            color: #fff;
+            display: inline-block;
+            line-height: 1.4;
+        }
+        
+        .status-wait {
+            background-color: #FFC107;
+        }
+        
+        .status-doing {
+            background-color: #2196F3;
+        }
+        
+        .status-done {
+            background-color: #4CAF50;
+        }
+        
+        .status-closed {
+            background-color: #9E9E9E;
+        }
+        
+        .status-cancel {
+            background-color: #F44336;
+        }
+        
+        .status-pause {
+            background-color: #FF9800;
         }
     `);
 
@@ -568,7 +602,8 @@
                             end_date: endDate,
                             progress: task.progress || 0,
                             open: true,
-                            status: task.status
+                            status: task.status,
+                            assignedTo: task.assignedTo || task.assignedToRealName || task.assignedToName || '',
                         };
 
                         tasks.data.push(ganttTask);
@@ -651,10 +686,44 @@
                 },
                 {name: "start_date", label: "开始时间", align: "center", width: 100, resize: true},
                 {name: "end_date", label: "结束时间", align: "center", width: 100, resize: true},
-                {name: "progress", label: "进度", align: "center", width: 80, resize: true, template: function(obj) {
-                    return Math.round(obj.progress * 100) + "%";
-                }},
-                {name: "status", label: "状态", align: "center", width: 80, resize: true}
+                {
+                    name: "assignedTo", 
+                    label: "指派给", 
+                    align: "center", 
+                    width: 80, 
+                    resize: true,
+                    template: function(task) {
+                        return task.assignedTo || '-';
+                    }
+                },
+                {
+                    name: "progress", 
+                    label: "进度", 
+                    align: "center", 
+                    width: 80, 
+                    resize: true, 
+                    template: function(obj) {
+                        return Math.round(obj.progress * 100) + "%";
+                    }
+                },
+                {
+                    name: "status", 
+                    label: "状态", 
+                    align: "center", 
+                    width: 80, 
+                    resize: true,
+                    template: function(task) {
+                        const statusMap = {
+                            'wait': '<span class="status-tag status-wait">未开始</span>',
+                            'doing': '<span class="status-tag status-doing">进行中</span>',
+                            'done': '<span class="status-tag status-done">已完成</span>',
+                            'closed': '<span class="status-tag status-closed">已关闭</span>',
+                            'cancel': '<span class="status-tag status-cancel">已取消</span>',
+                            'pause': '<span class="status-tag status-pause">已暂停</span>'
+                        };
+                        return statusMap[task.status] || task.status;
+                    }
+                }
             ];
 
             // 设置任务模板，根据状态显示不同颜色
