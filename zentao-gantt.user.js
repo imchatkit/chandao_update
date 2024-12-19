@@ -877,7 +877,7 @@
                 return false; // 阻止默认行为
             });
 
-            // 修改 initFilters 函数中的筛选框部分
+            // 修改 onGridHeaderClick 事件处理
             gantt.attachEvent("onGridHeaderClick", function(name, e) {
                 const column = gantt.getGridColumn(name);
                 if (!column) return;
@@ -885,8 +885,9 @@
                 const header = e.target.closest(".gantt_grid_head_cell");
                 if (!header) return;
 
+                // 获取所有可能的值（从原始任务数据中获取）
                 const values = new Set();
-                gantt.getTaskByTime().forEach(task => {
+                tasks.data.forEach(task => {
                     let value = task[name];
                     if (name === "progress") {
                         value = Math.round(task.progress * 100) + "%";
@@ -1234,9 +1235,25 @@
                 const header = e.target.closest(".gantt_grid_head_cell");
                 if (!header) return;
 
+                // 获取所有可能的值（从原始任务数据中获取）
                 const values = new Set();
-                gantt.getTaskByTime().forEach(task => {
-                    const value = task[name];
+                tasks.data.forEach(task => {
+                    let value = task[name];
+                    if (name === "progress") {
+                        value = Math.round(task.progress * 100) + "%";
+                    } else if (name === "status") {
+                        const statusMap = {
+                            'wait': '未开始',
+                            'doing': '进行中',
+                            'done': '已完成',
+                            'closed': '已关闭',
+                            'cancel': '已取消',
+                            'pause': '已暂停'
+                        };
+                        value = statusMap[value] || value;
+                    } else if (name === "assignedTo") {
+                        value = task.assignedTo || '未指派';
+                    }
                     if (value) values.add(value);
                 });
 
