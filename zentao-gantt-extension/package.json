@@ -1,0 +1,16 @@
+{
+  "name": "zentao-gantt-extension",
+  "version": "0.9.0",
+  "description": "禅道甘特图插件 - Chrome和Edge浏览器扩展",
+  "main": "js/content.js",
+  "scripts": {
+    "download-deps": "node download_deps.js",
+    "generate-icons": "node generate_icons.js",
+    "build": "npm run download-deps && npm run generate-icons"
+  },
+  "author": "何威 <hwe1233@163.com>",
+  "license": "MIT",
+  "dependencies": {
+    "canvas": "^2.11.0"
+  }
+} 

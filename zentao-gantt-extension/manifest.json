@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "禅道甘特图插件",
+  "version": "0.9.0",
+  "description": "在禅道执行页面添加甘特图展示",
+  "author": "何威 <hwe1233@163.com>",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "禅道甘特图插件"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://192.168.110.9:90/*"],
+      "js": [
+        "js/dhtmlxgantt.js",
+        "js/content.js"
+      ],
+      "css": [
+        "css/dhtmlxgantt.css",
+        "css/styles.css"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["http://192.168.110.9:90/*"]
+    }
+  ],
+  "permissions": [
+    "storage"
+  ]
+} 
