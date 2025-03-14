@@ -247,7 +247,7 @@ function createGanttButton() {
     return button;
 }
 
-// 等待任务数据加载完成
+// 修改 waitForTaskData 函数
 function waitForTaskData(callback, maxAttempts = 50) {
     let attempts = 0;
     
@@ -255,64 +255,63 @@ function waitForTaskData(callback, maxAttempts = 50) {
         attempts++;
         log(`尝试查找任务数据 (${attempts}/${maxAttempts})`);
 
-        // 首先检查主文档中的任务数据
-        try {
-            const mainTable = document.querySelector('#table-execution-task');
-            if (mainTable) {
-                const cells = mainTable.querySelectorAll('.dtable-cell[data-col="name"]');
-                if (cells.length > 0) {
-                    log(`在主文档中找到任务表格，包含 ${cells.length} 个任务`);
-                    callback(document);
-                    return;
-                }
-            }
-        } catch (e) {
-            log(`检查主文档时出错: ${e.message}`);
-        }
-        
-        // 检查iframe
-        const frames = [
-            document.getElementById('appIframe-execution'),
-            document.getElementById('appIframe-project')
-        ].filter(Boolean);
-
-        for (const frame of frames) {
+        // 检查主文档和iframe
+        const docs = [document];
+        const frames = Array.from(document.querySelectorAll('iframe'));
+        frames.forEach(frame => {
             try {
-                if (!frame.contentWindow || !frame.contentDocument) {
-                    continue;
-                }
-
-                const frameDoc = frame.contentDocument;
-                log(`检查iframe: ${frame.id}`);
-
-                // 检查加载状态
-                const loadingElement = frameDoc.querySelector('.loading');
-                if (loadingElement && loadingElement.style.display !== 'none') {
-                    log('任务数据正在加载中...');
-                    continue;
-                }
-
-                // 检查任务表格
-                const taskTable = frameDoc.querySelector('#table-execution-task');
-                if (taskTable) {
-                    const cells = taskTable.querySelectorAll('.dtable-cell[data-col="name"]');
-                    if (cells.length > 0) {
-                        log(`在iframe ${frame.id} 中找到任务表格，包含 ${cells.length} 个任务`);
-                        callback(frameDoc);
-                        return;
-                    }
+                if (frame.contentDocument) {
+                    docs.push(frame.contentDocument);
                 }
             } catch (e) {
-                log(`访问iframe ${frame.id} 时出错: ${e.message}`);
-                continue;
+                log(`无法访问iframe: ${e.message}`);
+            }
+        });
+
+        for (const doc of docs) {
+            try {
+                // 检查数据表格是否存在
+                const table = doc.querySelector('#table-execution-task');
+                if (!table) continue;
+
+                // 检查分页信息
+                const pager = doc.querySelector('.pager');
+                if (pager) {
+                    const totalRecords = parseInt(pager.getAttribute('data-total')) || 0;
+                    const recPerPage = parseInt(pager.getAttribute('data-rec-per-page')) || 20;
+                    
+                    log(`检测到分页 - 总记录数: ${totalRecords}, 每页显示: ${recPerPage}`);
+
+                    // 尝试修改每页显示数量
+                    if (doc.defaultView.dtable && typeof doc.defaultView.dtable.setRecPerPage === 'function') {
+                        try {
+                            doc.defaultView.dtable.setRecPerPage(totalRecords);
+                            log(`设置每页显示数量为: ${totalRecords}`);
+                            // 等待数据重新加载
+                            setTimeout(() => check(), 1000);
+                            return;
+                        } catch (e) {
+                            log(`设置每页显示数量失败: ${e.message}`);
+                        }
+                    }
+                }
+
+                // 检查任务单元格
+                const taskCells = table.querySelectorAll('.dtable-cell[data-col="name"]');
+                if (taskCells.length > 0) {
+                    log(`找到 ${taskCells.length} 个任务`);
+                    callback(doc);
+                    return;
+                }
+            } catch (e) {
+                log(`检查文档出错: ${e.message}`);
             }
         }
 
         if (attempts < maxAttempts) {
-            const delay = Math.min(200 * Math.pow(1.1, attempts), 1000);
-            setTimeout(check, delay);
+            setTimeout(check, Math.min(200 * Math.pow(1.1, attempts), 1000));
         } else {
-            log('等待任务数据超时，尝试使用当前文档');
+            log('等待任务数据超时');
             callback(document);
         }
     }

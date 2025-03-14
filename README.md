@@ -9,6 +9,14 @@ gitHUb地址：https://github.com/imchatkit/chandao_update
 
 详细安装和使用说明请查看[浏览器插件版本说明](zentao-gantt-extension/README.md)
 
+1. 下载本插件的最新版本
+2. 打开浏览器，进入扩展程序页面（chrome://extensions/）
+3. 开启右上角的"开发者模式"
+4. 点击"加载已解压的扩展程序"
+5. 选择本插件的目录
+6. 选择本项目的\zentao-gantt-extension\目录即可
+
+
 ## 新增功能
 
 ### 1. 列筛选功能
