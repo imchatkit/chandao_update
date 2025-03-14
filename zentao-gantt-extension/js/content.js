@@ -469,15 +469,36 @@ function extractTasksFromDOM(doc) {
                 const nameLink = nameCell.querySelector('.dtable-cell-content a');
                 if (!nameLink) return;
 
+                // 获取状态单元格 - 使用更精确的选择器
+                const statusCell = doc.querySelector(`#table-execution-task .dtable-block.dtable-body .dtable-cells.dtable-scroll-center [data-row="${rowId}"][data-col="status"]`);
+                
                 // 获取其他数据
                 const container = nameCell.closest('.dtable-cells-container') || doc.querySelector('.dtable-cells-container');
                 if (!container) return;
 
-                const statusCell = container.querySelector(`[data-col="status"][data-row="${rowId}"] .dtable-cell-content span`);
                 const assignedToCell = container.querySelector(`[data-col="assignedTo"][data-row="${rowId}"] .dtable-cell-content span`);
                 const estStartedCell = container.querySelector(`[data-col="estStarted"][data-row="${rowId}"] .dtable-cell-content`);
                 const deadlineCell = container.querySelector(`[data-col="deadline"][data-row="${rowId}"] .dtable-cell-content`);
                 const progressCell = container.querySelector(`[data-col="progress"][data-row="${rowId}"] text`);
+
+                // 获取状态值
+                let status = '';
+                if (statusCell) {
+                    const statusSpan = statusCell.querySelector('.dtable-cell-content span');
+                    if (statusSpan) {
+                        // 从class名称中提取状态
+                        const statusClass = Array.from(statusSpan.classList)
+                            .find(className => className.startsWith('status-'));
+                        if (statusClass) {
+                            status = statusClass.replace('status-', '');
+                            log(`从class获取到状态: ${status} (来自 ${statusSpan.className})`);
+                        } else {
+                            // 如果没有找到status-类，直接使用文本内容
+                            status = statusSpan.textContent.trim();
+                            log(`从文本获取到状态: ${status}`);
+                        }
+                    }
+                }
 
                 const task = {
                     id: rowId,
@@ -486,12 +507,12 @@ function extractTasksFromDOM(doc) {
                     end_date: formatDate(deadlineCell ? deadlineCell.textContent.trim() : '', true),
                     progress: progressCell ? parseInt(progressCell.textContent.trim()) / 100 : 0,
                     open: true,
-                    status: statusCell ? statusCell.textContent.trim() : '',
+                    status: status,
                     assignedTo: assignedToCell ? assignedToCell.textContent.trim() : '-'
                 };
 
                 tasks.push(task);
-                log(`成功添加任务: ${task.text}`);
+                log(`成功添加任务: ${task.text}, 状态: ${task.status}`);
             });
         }
 
@@ -706,14 +727,22 @@ function initializeGanttConfig(container, tasks) {
     gantt.config.date_grid = "%Y-%m-%d";
     
     // 优化显示配置
-    gantt.config.scale_height = 50;
     gantt.config.row_height = 28;
     gantt.config.task_height = 16;
     gantt.config.min_column_width = 30;
-    gantt.config.scale_unit = "day";
-    gantt.config.date_scale = "%d";
-    gantt.config.subscales = [
-        {unit: "month", step: 1, date: "%Y年%m月"}
+
+    // 使用新版本的时间刻度配置
+    gantt.config.scales = [
+        {
+            unit: "month",
+            step: 1,
+            format: "%Y年%m月"
+        },
+        {
+            unit: "day",
+            step: 1,
+            format: "%d"
+        }
     ];
     
     // 启用智能渲染以提高性能
