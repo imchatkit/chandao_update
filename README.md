@@ -4,6 +4,11 @@
 
 gitHUb地址：https://github.com/imchatkit/chandao_update
 
+
+# 浏览器插件版本:
+
+详细安装和使用说明请查看[浏览器插件版本说明](zentao-gantt-extension/README.md)
+
 ## 新增功能
 
 ### 1. 列筛选功能
