@@ -95,6 +95,40 @@ style.textContent = `
         height: 100%;
         background: white;
     }
+    
+    /* 状态标签样式 */
+    .status-tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-size: 12px;
+        line-height: 1.5;
+        font-weight: 500;
+    }
+    .status-wait {
+        background-color: #838A95;
+        color: #FFFFFF;
+    }
+    .status-doing {
+        background-color: #006AF1;
+        color: #FFFFFF;
+    }
+    .status-done {
+        background-color: #0B8E36;
+        color: #FFFFFF;
+    }
+    .status-closed {
+        background-color: #991D1F;
+        color: #FFFFFF;
+    }
+    .status-cancel {
+        background-color: #6F1148;
+        color: #FFFFFF;
+    }
+    .status-pause {
+        background-color: #FFA500;
+        color: #FFFFFF;
+    }
 `;
 document.head.appendChild(style);
 
