@@ -5,8 +5,7 @@
   "main": "js/content.js",
   "scripts": {
     "download-deps": "node download_deps.js",
-    "generate-icons": "node generate_icons.js",
-    "build": "npm run download-deps && npm run generate-icons"
+    "build": "npm run download-deps"
   },
   "author": "何威 <hwe1233@163.com>",
   "license": "MIT",

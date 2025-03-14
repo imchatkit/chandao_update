@@ -38,6 +38,10 @@
     cursor: pointer;
 }
 
+#gantt-chart-btn:hover {
+    background-color: #0056b3;
+}
+
 /* 甘特图模态框样式 */
 .gantt-modal-overlay {
     position: fixed;

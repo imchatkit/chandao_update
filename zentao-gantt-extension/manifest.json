@@ -15,7 +15,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "禅道甘特图插件"
+    "default_title": "禅道甘特图"
   },
   "content_scripts": [
     {
@@ -27,16 +27,28 @@
       "css": [
         "css/dhtmlxgantt.css",
         "css/styles.css"
-      ]
+      ],
+      "run_at": "document_end",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*"],
+      "resources": [
+        "js/dhtmlxgantt.js",
+        "css/dhtmlxgantt.css",
+        "css/styles.css",
+        "icons/*"
+      ],
       "matches": ["http://192.168.110.9:90/*"]
     }
   ],
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://192.168.110.9:90/*"
   ]
 } 
